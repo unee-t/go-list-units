@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"html/template"
 	"net/http"
 	"os"
@@ -33,25 +34,20 @@ func init() {
 func main() {
 	addr := ":" + os.Getenv("PORT")
 	app := pat.New()
-	app.Get("/list", list)
+	app.Get("/list", listhtml)
+	app.Get("/json", listjson)
 	if err := http.ListenAndServe(addr, app); err != nil {
 		log.WithError(err).Fatal("error listening")
 	}
 
 }
 
-func list(w http.ResponseWriter, r *http.Request) {
-
-	if os.Getenv("UP_STAGE") != "production" {
-		w.Header().Set("X-Robots-Tag", "none")
-	}
+func getUnits() (units []unit, err error) {
 
 	// db, err := sql.Open("mysql", "root:uniti@/bugzilla")
 	db, err := sql.Open("mysql", os.Getenv("DSN"))
 	if err != nil {
-		log.WithError(err).Error("failed to open database")
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return units, err
 	}
 
 	defer db.Close()
@@ -60,20 +56,16 @@ func list(w http.ResponseWriter, r *http.Request) {
 	err = db.Ping()
 	if err != nil {
 		log.WithError(err).Error("failed to open database")
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return units, err
 	}
 
 	rows, err := db.Query("select id, name, description from products")
 	if err != nil {
 		log.WithError(err).Error("failed to open database")
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return units, err
 	}
 
 	defer rows.Close()
-
-	var units []unit
 
 	for rows.Next() {
 		var u unit
@@ -81,8 +73,7 @@ func list(w http.ResponseWriter, r *http.Request) {
 
 		if err != nil {
 			log.WithError(err).Error("failed to scan")
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			return units, err
 		}
 		log.Infof("%d %s", u.Id, u.Name, u.Description)
 		units = append(units, u)
@@ -92,11 +83,43 @@ func list(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		log.WithError(err).Error("row iterator issue")
+		return units, err
+	}
+
+	return units, err
+
+}
+
+func listhtml(w http.ResponseWriter, r *http.Request) {
+
+	if os.Getenv("UP_STAGE") != "production" {
+		w.Header().Set("X-Robots-Tag", "none")
+	}
+
+	units, err := getUnits()
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	t := template.Must(template.New("").ParseGlob("templates/*.html"))
 	t.ExecuteTemplate(w, "index.html", units)
+
+}
+
+func listjson(w http.ResponseWriter, r *http.Request) {
+
+	if os.Getenv("UP_STAGE") != "production" {
+		w.Header().Set("X-Robots-Tag", "none")
+	}
+
+	units, err := getUnits()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(units)
 
 }
