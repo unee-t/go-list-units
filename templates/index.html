@@ -1,0 +1,5 @@
+<h1>Listing {{ len . }} units</h1>
+<ol>{{range .}}
+<li value="{{.Id}}">{{.Name}} - {{ .Description }}</li>
+{{- end}}
+</ol>

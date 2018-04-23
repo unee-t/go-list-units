@@ -1,6 +1,7 @@
 package main
 
 import (
+	"html/template"
 	"net/http"
 	"os"
 
@@ -15,10 +16,11 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-var (
-	id   int
-	name string
-)
+type unit struct {
+	Id          int
+	Name        string
+	Description template.HTML
+}
 
 func init() {
 	if os.Getenv("UP_STAGE") == "" {
@@ -39,7 +41,13 @@ func main() {
 }
 
 func list(w http.ResponseWriter, r *http.Request) {
-	db, err := sql.Open("mysql", "root:uniti@/bugzilla")
+
+	if os.Getenv("UP_STAGE") != "production" {
+		w.Header().Set("X-Robots-Tag", "none")
+	}
+
+	// db, err := sql.Open("mysql", "root:uniti@/bugzilla")
+	db, err := sql.Open("mysql", os.Getenv("DSN"))
 	if err != nil {
 		log.WithError(err).Error("failed to open database")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -56,7 +64,7 @@ func list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := db.Query("select id, name from products")
+	rows, err := db.Query("select id, name, description from products")
 	if err != nil {
 		log.WithError(err).Error("failed to open database")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -65,15 +73,19 @@ func list(w http.ResponseWriter, r *http.Request) {
 
 	defer rows.Close()
 
+	var units []unit
+
 	for rows.Next() {
-		err := rows.Scan(&id, &name)
+		var u unit
+		err := rows.Scan(&u.Id, &u.Name, &u.Description)
 
 		if err != nil {
 			log.WithError(err).Error("failed to scan")
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		log.Infof("OK %d %s", id, name)
+		log.Infof("%d %s", u.Id, u.Name, u.Description)
+		units = append(units, u)
 	}
 
 	err = rows.Err()
@@ -83,5 +95,8 @@ func list(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	t := template.Must(template.New("").ParseGlob("templates/*.html"))
+	t.ExecuteTemplate(w, "index.html", units)
 
 }
