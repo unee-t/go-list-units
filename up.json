@@ -1,7 +1,23 @@
 {
-  "name": "listunits",
-  "profile": "uneet-dev",
-  "regions": [
-    "ap-southeast-1"
-  ]
+	"name": "listunits",
+	"profile": "uneet-dev",
+	"stages": {
+		"staging": {
+			"domain": "list.dev.unee-t.com",
+			"zone": "dev.unee-t.com"
+		}
+	},
+	"regions": [ "ap-southeast-1" ],
+	"error_pages": { "disable": true },
+	"lambda": {
+		"policy": [
+			{
+				"Effect": "Allow",
+				"Resource": "*",
+				"Action": [
+					"ssm:GetParameter"
+				]
+			}
+		]
+	}
 }

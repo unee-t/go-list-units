@@ -2,15 +2,19 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"net/http"
 	"os"
 
 	jsonhandler "github.com/apex/log/handlers/json"
+	"github.com/aws/aws-sdk-go-v2/aws/endpoints"
+	"github.com/aws/aws-sdk-go-v2/aws/external"
+	"github.com/gorilla/mux"
+	"github.com/unee-t/env"
 
 	"github.com/apex/log"
 	"github.com/apex/log/handlers/text"
-	"github.com/gorilla/pat"
 
 	"database/sql"
 
@@ -33,9 +37,9 @@ func init() {
 
 func main() {
 	addr := ":" + os.Getenv("PORT")
-	app := pat.New()
-	app.Get("/list", listhtml)
-	app.Get("/json", listjson)
+	app := mux.NewRouter()
+	app.HandleFunc("/", listjson).Methods("GET").Headers("Accept", "application/json")
+	app.HandleFunc("/", listhtml).Methods("GET")
 	if err := http.ListenAndServe(addr, app); err != nil {
 		log.WithError(err).Fatal("error listening")
 	}
@@ -44,8 +48,21 @@ func main() {
 
 func getUnits() (units []unit, err error) {
 
-	// db, err := sql.Open("mysql", "root:uniti@/bugzilla")
-	db, err := sql.Open("mysql", os.Getenv("DSN"))
+	cfg, err := external.LoadDefaultAWSConfig(external.WithSharedConfigProfile("uneet-dev"))
+	if err != nil {
+		log.WithError(err).Fatal("setting up credentials")
+		return
+	}
+	cfg.Region = endpoints.ApSoutheast1RegionID
+	e, err := env.New(cfg)
+	if err != nil {
+		log.WithError(err).Warn("error getting unee-t env")
+	}
+
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:3306)/bugzilla?multiStatements=true&sql_mode=TRADITIONAL",
+		e.GetSecret("MYSQL_USER"),
+		e.GetSecret("MYSQL_PASSWORD"),
+		e.Udomain("auroradb")))
 	if err != nil {
 		return units, err
 	}

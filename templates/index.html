@@ -1,5 +1,8 @@
+<style>
+pre { background-color: grey; }
+</style>
 <h1>Listing {{ len . }} units</h1>
 <ol>{{range .}}
-<li value="{{.Id}}">{{.Name}} - {{ .Description }}</li>
+	<li value="{{.Id}}">{{.Name}}<pre>{{ .Description }}</pre></li>
 {{- end}}
 </ol>
