@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"net/url"
 	"os"
 
 	"github.com/apex/log"
@@ -67,18 +66,23 @@ func main() {
 	provider := stscreds.NewAssumeRoleProvider(stsSvc, *roleArnPtr)
 	log.Info(provider.RoleARN)
 
-	v := url.Values{}
-	// required fields for DB connection
-	v.Add("tls", "rds")
-	v.Add("allowCleartextPasswords", "true")
+	// v := url.Values{}
+	// // required fields for DB connection
+	// v.Add("tls", "rds")
+	// v.Add("allowCleartextPasswords", "true")
 	endpoint := fmt.Sprintf("%s:%d", *endpointPtr, *portPtr)
 
-	// https://godoc.org/github.com/aws/aws-sdk-go-v2/service/rds/rdsutils#NewConnectionStringBuilder
-	b := rdsutils.NewConnectionStringBuilder(endpoint, *regionPtr, *userPtr, *dbNamePtr, provider)
-	connectStr, err := b.WithTCPFormat().WithParams(v).Build()
+	log.Infof("endpoint: %s", endpoint)
+
+	// https: //godoc.org/github.com/aws/aws-sdk-go-v2/service/rds/rdsutils#BuildAuthToken
+	authToken, err := rdsutils.BuildAuthToken(endpoint, *regionPtr, *userPtr, provider)
 	if err != nil {
 		log.WithError(err).Fatal("unable to build connection string")
 	}
+
+	connectStr := fmt.Sprintf("%s:%s@tcp(%s)/%s?allowCleartextPasswords=true&tls=rds",
+		*userPtr, authToken, endpoint, *dbNamePtr,
+	)
 
 	const dbType = "mysql"
 	log.Info(connectStr)
