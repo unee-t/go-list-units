@@ -127,7 +127,26 @@ func (h handler) listjson(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h handler) prometheus(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprint(w, "# HELP count_total shows the in-memory count, which will get reset in the event of the lambda going cold or scaling.\n# TYPE count_total counter\ncount_total")
+
+	rows, err := h.db.Query("select COUNT(*) from user_group_map")
+	if err != nil {
+		log.WithError(err).Error("failed to open database")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var count int
+
+	for rows.Next() {
+		if err := rows.Scan(&count); err != nil {
+			log.WithError(err).Error("failed to scan count")
+		}
+	}
+
+	log.Infof("Count: %d", count)
+
+	fmt.Fprintf(w, "# HELP user_group_map_total shows the number of rows in the user_group_map table.\n# TYPE user_group_map_total counter\nuser_group_map_total %d", count)
 }
 
 // New setups the configuration assuming various parameters have been setup in the AWS account
