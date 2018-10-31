@@ -1,8 +1,14 @@
 <style>
-pre { background-color: grey; }
+body {
+  margin: 0 auto;
+  max-width: 800px;
+  padding: 10px;
+  font-family: Noto Serif, serif;
+}
+h2 { border-bottom: thin solid black; }
 </style>
 <h1>Listing {{ len . }} units</h1>
-<ol>{{range .}}
-	<li value="{{.Id}}">{{.Name}}<pre>{{ .Description }}</pre></li>
+{{range .}}
+<h2 id="{{.Id}}">{{.Name}}</h2>
+<p>{{ .Description }}</p>
 {{- end}}
-</ol>

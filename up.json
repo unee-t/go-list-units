@@ -1,23 +1,36 @@
 {
-	"name": "listunits",
-	"profile": "uneet-dev",
-	"stages": {
-		"staging": {
-			"domain": "list.dev.unee-t.com",
-			"zone": "dev.unee-t.com"
-		}
-	},
-	"regions": [ "ap-southeast-1" ],
-	"error_pages": { "disable": true },
-	"lambda": {
-		"policy": [
-			{
-				"Effect": "Allow",
-				"Resource": "*",
-				"Action": [
-					"ssm:GetParameter"
-				]
-			}
-		]
-	}
+  "name": "listunits2",
+  "profile": "uneet-dev",
+  "stages": {
+    "staging": {
+      "domain": "list2.dev.unee-t.com",
+      "zone": "dev.unee-t.com"
+    }
+  },
+  "regions": [
+    "ap-southeast-1"
+  ],
+  "error_pages": {
+    "disable": true
+  },
+  "lambda": {
+    "policy": [
+      {
+        "Effect": "Allow",
+        "Resource": "*",
+        "Action": [
+          "ssm:GetParameter"
+        ]
+      }
+    ],
+    "vpc": {
+      "subnets": [
+        "subnet-0e123bd457c082cff"
+      ],
+      "security_groups": [
+        "sg-0b83472a34bc17400",
+        "sg-0f4dadb564041855b"
+      ]
+    }
+  }
 }

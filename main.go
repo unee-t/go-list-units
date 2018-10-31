@@ -8,13 +8,13 @@ import (
 	"os"
 
 	jsonhandler "github.com/apex/log/handlers/json"
+	"github.com/apex/log/handlers/text"
 	"github.com/aws/aws-sdk-go-v2/aws/endpoints"
 	"github.com/aws/aws-sdk-go-v2/aws/external"
 	"github.com/gorilla/mux"
 	"github.com/unee-t/env"
 
 	"github.com/apex/log"
-	"github.com/apex/log/handlers/text"
 
 	"database/sql"
 
@@ -92,7 +92,6 @@ func getUnits() (units []unit, err error) {
 			log.WithError(err).Error("failed to scan")
 			return units, err
 		}
-		log.Infof("%d %s", u.Id, u.Name, u.Description)
 		units = append(units, u)
 	}
 
