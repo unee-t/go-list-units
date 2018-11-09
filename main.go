@@ -25,10 +25,8 @@ type unit struct {
 }
 
 type handler struct {
-	DSN            string // e.g. "bugzilla:secret@tcp(auroradb.dev.unee-t.com:3306)/bugzilla?multiStatements=true&sql_mode=TRADITIONAL"
-	APIAccessToken string // e.g. O8I9svDTizOfLfdVA5ri
-	db             *sql.DB
-	Code           env.EnvCode
+	DSN string // e.g. "bugzilla:secret@tcp(auroradb.dev.unee-t.com:3306)/bugzilla?multiStatements=true&sql_mode=TRADITIONAL"
+	db  *sql.DB
 }
 
 func init() {
@@ -53,7 +51,7 @@ func main() {
 	app := mux.NewRouter()
 	app.HandleFunc("/", h.listjson).Methods("GET").Headers("Accept", "application/json")
 	app.HandleFunc("/", h.listhtml).Methods("GET")
-	app.HandleFunc("/metrics", h.prometheus)
+	app.HandleFunc("/ping", h.ping).Methods("GET")
 	if err := http.ListenAndServe(addr, app); err != nil {
 		log.WithError(err).Fatal("error listening")
 	}
@@ -94,10 +92,6 @@ func (h handler) getUnits() (units []unit, err error) {
 
 func (h handler) listhtml(w http.ResponseWriter, r *http.Request) {
 
-	if os.Getenv("UP_STAGE") != "production" {
-		w.Header().Set("X-Robots-Tag", "none")
-	}
-
 	units, err := h.getUnits()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -126,33 +120,10 @@ func (h handler) listjson(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func (h handler) prometheus(w http.ResponseWriter, r *http.Request) {
-
-	rows, err := h.db.Query("select COUNT(*) from user_group_map")
-	if err != nil {
-		log.WithError(err).Error("failed to open database")
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer rows.Close()
-
-	var count int
-
-	for rows.Next() {
-		if err := rows.Scan(&count); err != nil {
-			log.WithError(err).Error("failed to scan count")
-		}
-	}
-
-	log.Infof("Count: %d", count)
-
-	fmt.Fprintf(w, "# HELP user_group_map_total shows the number of rows in the user_group_map table.\n# TYPE user_group_map_total counter\nuser_group_map_total %d", count)
-}
-
 // New setups the configuration assuming various parameters have been setup in the AWS account
 func New() (h handler, err error) {
 
-	cfg, err := external.LoadDefaultAWSConfig(external.WithSharedConfigProfile("uneet-prod"))
+	cfg, err := external.LoadDefaultAWSConfig(external.WithSharedConfigProfile("uneet-dev"))
 	if err != nil {
 		log.WithError(err).Fatal("setting up credentials")
 		return
@@ -177,8 +148,6 @@ func New() (h handler, err error) {
 			e.GetSecret("MYSQL_USER"),
 			e.GetSecret("MYSQL_PASSWORD"),
 			mysqlhost),
-		APIAccessToken: e.GetSecret("API_ACCESS_TOKEN"),
-		Code:           e.Code,
 	}
 
 	h.db, err = sql.Open("mysql", h.DSN)
@@ -189,4 +158,13 @@ func New() (h handler, err error) {
 
 	return
 
+}
+
+func (h handler) ping(w http.ResponseWriter, r *http.Request) {
+	err := h.db.Ping()
+	if err != nil {
+		log.WithError(err).Error("failed to ping database")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	fmt.Fprintf(w, "OK")
 }
