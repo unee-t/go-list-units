@@ -13,7 +13,6 @@ import (
 	"os"
 
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/rds/rdsutils"
 	"github.com/go-sql-driver/mysql"
@@ -33,8 +32,7 @@ func main() {
 
 	userPtr := flag.String("user", "mydbuser", "user of the credentials")
 	regionPtr := flag.String("region", "ap-southeast-1", "region to be used when grabbing sts creds")
-	roleArnPtr := flag.String("rolearn", "arn:aws:iam::812644853088:role/listunits-function", "role arn to be used when grabbing sts creds")
-	endpointPtr := flag.String("endpoint", "rollbackfurther.c5eg6u2xj9yy.ap-southeast-1.rds.amazonaws.com", "DB endpoint to be connected to")
+	endpointPtr := flag.String("endpoint", "twoam2-cluster.cluster-c5eg6u2xj9yy.ap-southeast-1.rds.amazonaws.com", "DB endpoint to be connected to")
 	portPtr := flag.Int("port", 3306, "DB port to be connected to")
 	tablePtr := flag.String("table", "user_group_map", "DB table to query against")
 	dbNamePtr := flag.String("dbname", "bugzilla", "DB name to query against")
@@ -45,7 +43,6 @@ func main() {
 	if err := requiredFlags(
 		userPtr,
 		regionPtr,
-		roleArnPtr,
 		endpointPtr,
 		portPtr,
 		dbNamePtr,
@@ -60,7 +57,7 @@ func main() {
 		panic(err)
 	}
 
-	creds := stscreds.NewCredentials(sess, *roleArnPtr)
+	creds := sess.Config.Credentials
 
 	v := url.Values{}
 	// required fields for DB connection
