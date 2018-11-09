@@ -1,10 +1,13 @@
 package main
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io/ioutil"
 	"net/http"
 	"os"
 
@@ -13,9 +16,10 @@ import (
 	"github.com/apex/log/handlers/text"
 	"github.com/aws/aws-sdk-go-v2/aws/endpoints"
 	"github.com/aws/aws-sdk-go-v2/aws/external"
+	"github.com/aws/aws-sdk-go-v2/service/rds/rdsutils"
+	"github.com/go-sql-driver/mysql"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/mux"
-	"github.com/unee-t/env"
 )
 
 type unit struct {
@@ -25,7 +29,7 @@ type unit struct {
 }
 
 type handler struct {
-	DSN string // e.g. "bugzilla:secret@tcp(auroradb.dev.unee-t.com:3306)/bugzilla?multiStatements=true&sql_mode=TRADITIONAL"
+	DSN string
 	db  *sql.DB
 }
 
@@ -129,26 +133,23 @@ func New() (h handler, err error) {
 		return
 	}
 	cfg.Region = endpoints.ApSoutheast1RegionID
-	e, err := env.New(cfg)
+
+	err = RegisterRDSMysqlCerts(http.DefaultClient)
 	if err != nil {
-		log.WithError(err).Warn("error getting AWS unee-t env")
+		log.WithError(err).Fatal("failed to register certificates")
 	}
 
-	var mysqlhost string
-	val, ok := os.LookupEnv("MYSQL_HOST")
-	if ok {
-		log.Infof("MYSQL_HOST overridden by local env: %s", val)
-		mysqlhost = val
-	} else {
-		mysqlhost = e.Udomain("auroradb")
-	}
+	provider := cfg.Credentials
+	endpoint := "twoam2-cluster.cluster-c5eg6u2xj9yy.ap-southeast-1.rds.amazonaws.com:3306"
+	user := "mydbuser"
 
-	h = handler{
-		DSN: fmt.Sprintf("%s:%s@tcp(%s:3306)/bugzilla?multiStatements=true&sql_mode=TRADITIONAL",
-			e.GetSecret("MYSQL_USER"),
-			e.GetSecret("MYSQL_PASSWORD"),
-			mysqlhost),
-	}
+	authToken, err := rdsutils.BuildAuthToken(endpoint, "ap-southeast-1", user, provider)
+
+	h.DSN = fmt.Sprintf("%s:%s@tcp(%s)/%s?allowCleartextPasswords=true&tls=rds",
+		user, authToken, endpoint, "bugzilla",
+	)
+
+	log.Info(h.DSN)
 
 	h.db, err = sql.Open("mysql", h.DSN)
 	if err != nil {
@@ -167,4 +168,27 @@ func (h handler) ping(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 	fmt.Fprintf(w, "OK")
+}
+
+func RegisterRDSMysqlCerts(c *http.Client) error {
+	// resp, err := c.Get("https://s3.amazonaws.com/rds-downloads/rds-combined-ca-bundle.pem")
+	// if err != nil {
+	// 	panic(err)
+	// }
+
+	pem, err := ioutil.ReadFile("./iam/rds-combined-ca-bundle.pem")
+	if err != nil {
+		panic(err)
+	}
+
+	rootCertPool := x509.NewCertPool()
+	if ok := rootCertPool.AppendCertsFromPEM(pem); !ok {
+		panic(err)
+	}
+
+	err = mysql.RegisterTLSConfig("rds", &tls.Config{RootCAs: rootCertPool, InsecureSkipVerify: true})
+	if err != nil {
+		panic(err)
+	}
+	return nil
 }

@@ -1,9 +1,9 @@
 {
-  "name": "listunits",
+  "name": "listunits-iam",
   "profile": "uneet-dev",
   "stages": {
     "staging": {
-      "domain": "list.dev.unee-t.com",
+      "domain": "list-iam.dev.unee-t.com",
       "zone": "dev.unee-t.com"
     }
   },
@@ -13,24 +13,13 @@
   "error_pages": {
     "disable": true
   },
-  "lambda": {
-    "policy": [
-      {
-        "Effect": "Allow",
-        "Resource": "*",
-        "Action": [
-          "ssm:GetParameter"
-        ]
-      }
+  "vpc": {
+    "subnets": [
+      "subnet-0e123bd457c082cff"
     ],
-    "vpc": {
-      "subnets": [
-        "subnet-0e123bd457c082cff"
-      ],
-      "security_groups": [
-        "sg-0b83472a34bc17400",
-        "sg-0f4dadb564041855b"
-      ]
-    }
+    "security_groups": [
+      "sg-0b83472a34bc17400",
+      "sg-0f4dadb564041855b"
+    ]
   }
 }
