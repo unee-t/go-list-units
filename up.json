@@ -1,6 +1,6 @@
 {
   "name": "listunits2",
-  "profile": "uneet-dev",
+  "profile": "uneet-prod",
   "stages": {
     "staging": {
       "domain": "list2.dev.unee-t.com",

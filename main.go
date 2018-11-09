@@ -152,7 +152,7 @@ func (h handler) prometheus(w http.ResponseWriter, r *http.Request) {
 // New setups the configuration assuming various parameters have been setup in the AWS account
 func New() (h handler, err error) {
 
-	cfg, err := external.LoadDefaultAWSConfig(external.WithSharedConfigProfile("uneet-dev"))
+	cfg, err := external.LoadDefaultAWSConfig(external.WithSharedConfigProfile("uneet-prod"))
 	if err != nil {
 		log.WithError(err).Fatal("setting up credentials")
 		return

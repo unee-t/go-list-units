@@ -7,23 +7,30 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
+	"net/url"
 	"os"
 
-	"github.com/apex/log"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/rds/rdsutils"
 	"github.com/go-sql-driver/mysql"
-
-	"github.com/aws/aws-sdk-go-v2/aws/external"
-	"github.com/aws/aws-sdk-go-v2/aws/stscreds"
-	"github.com/aws/aws-sdk-go-v2/service/rds/rdsutils"
-	"github.com/aws/aws-sdk-go-v2/service/sts"
 )
 
-// ExampleConnectionStringBuilder contains usage of assuming a role and using
-// that to build the auth token.
-// Usage:
-//	./main -user "iamuser" -dbname "foo" -region "us-west-2" -rolearn "arn" -endpoint "dbendpoint" -port 3306
+func newAWSSession(profile string, region string) (*session.Session, error) {
+	cfg := aws.Config{Region: aws.String(region), CredentialsChainVerboseErrors: aws.Bool(true)}
+	sessionOpts := session.Options{Profile: profile, Config: cfg}
+	return session.NewSessionWithOptions(sessionOpts)
+}
+
 func main() {
+	sess, err := newAWSSession("uneet-dev", "ap-southeast-1")
+	if err != nil {
+		panic(err)
+	}
+
 	userPtr := flag.String("user", "mydbuser", "user of the credentials")
 	regionPtr := flag.String("region", "ap-southeast-1", "region to be used when grabbing sts creds")
 	roleArnPtr := flag.String("rolearn", "arn:aws:iam::812644853088:role/listunits-function", "role arn to be used when grabbing sts creds")
@@ -48,49 +55,34 @@ func main() {
 		os.Exit(1)
 	}
 
-	err := registerRDSMysqlCerts(http.DefaultClient)
+	err = registerRDSMysqlCerts(http.DefaultClient)
 	if err != nil {
-		log.WithError(err).Fatal("failed to register certificates")
+		panic(err)
 	}
 
-	cfg, err := external.LoadDefaultAWSConfig(external.WithSharedConfigProfile("uneet-dev"))
+	creds := stscreds.NewCredentials(sess, *roleArnPtr)
 
-	if err != nil {
-		log.WithError(err).Fatal("failed to setup credentials")
-	}
-
-	cfg.Region = *regionPtr
-
-	// https://godoc.org/github.com/aws/aws-sdk-go-v2/aws/stscreds#AssumeRoleProvider
-	stsSvc := sts.New(cfg)
-	provider := stscreds.NewAssumeRoleProvider(stsSvc, *roleArnPtr)
-	log.Info(provider.RoleARN)
-
-	// v := url.Values{}
-	// // required fields for DB connection
-	// v.Add("tls", "rds")
-	// v.Add("allowCleartextPasswords", "true")
+	v := url.Values{}
+	// required fields for DB connection
+	v.Add("tls", "rds")
+	v.Add("allowCleartextPasswords", "true")
 	endpoint := fmt.Sprintf("%s:%d", *endpointPtr, *portPtr)
 
-	log.Infof("endpoint: %s", endpoint)
+	b := rdsutils.NewConnectionStringBuilder(endpoint, *regionPtr, *userPtr, *dbNamePtr, creds)
+	connectStr, err := b.WithTCPFormat().WithParams(v).Build()
 
-	// https: //godoc.org/github.com/aws/aws-sdk-go-v2/service/rds/rdsutils#BuildAuthToken
-	authToken, err := rdsutils.BuildAuthToken(endpoint, *regionPtr, *userPtr, provider)
 	if err != nil {
-		log.WithError(err).Fatal("unable to build connection string")
+		panic(err)
 	}
 
-	connectStr := fmt.Sprintf("%s:%s@tcp(%s)/%s?allowCleartextPasswords=true&tls=rds",
-		*userPtr, authToken, endpoint, *dbNamePtr,
-	)
+	log.Println(connectStr)
 
 	const dbType = "mysql"
-	log.Info(connectStr)
 	db, err := sql.Open(dbType, connectStr)
 	// if an error is encountered here, then most likely security groups are incorrect
 	// in the database.
 	if err != nil {
-		log.WithError(err).Fatal("failed to connect to db")
+		panic(fmt.Errorf("failed to open connection to the database"))
 	}
 
 	rows, err := db.Query(fmt.Sprintf("SELECT * FROM %s  LIMIT 1", *tablePtr))
@@ -133,7 +125,6 @@ func registerRDSMysqlCerts(c *http.Client) error {
 	if ok := rootCertPool.AppendCertsFromPEM(pem); !ok {
 		return fmt.Errorf("failed to append cert to cert pool!")
 	}
-	log.Info("Loaded https://s3.amazonaws.com/rds-downloads/rds-combined-ca-bundle.pem")
 
 	return mysql.RegisterTLSConfig("rds", &tls.Config{RootCAs: rootCertPool, InsecureSkipVerify: true})
 }
