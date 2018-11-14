@@ -140,9 +140,11 @@ func New() (h handler, err error) {
 	}
 
 	provider := cfg.Credentials
-	endpoint := "twoam2-cluster.cluster-c5eg6u2xj9yy.ap-southeast-1.rds.amazonaws.com:3306"
+	// endpoint := "twoam2-cluster.cluster-c5eg6u2xj9yy.ap-southeast-1.rds.amazonaws.com:3306"
+	endpoint := "twoam2.c5eg6u2xj9yy.ap-southeast-1.rds.amazonaws.com:3306"
 	user := "mydbuser"
 
+	log.Info(endpoint)
 	authToken, err := rdsutils.BuildAuthToken(endpoint, "ap-southeast-1", user, provider)
 
 	h.DSN = fmt.Sprintf("%s:%s@tcp(%s)/%s?allowCleartextPasswords=true&tls=rds",
