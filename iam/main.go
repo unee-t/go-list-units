@@ -7,11 +7,11 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
 
+	"github.com/apex/log"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/rds/rdsutils"
@@ -34,7 +34,6 @@ func main() {
 	regionPtr := flag.String("region", "ap-southeast-1", "region to be used when grabbing sts creds")
 	endpointPtr := flag.String("endpoint", "twoam2-cluster.cluster-c5eg6u2xj9yy.ap-southeast-1.rds.amazonaws.com", "DB endpoint to be connected to")
 	portPtr := flag.Int("port", 3306, "DB port to be connected to")
-	tablePtr := flag.String("table", "user_group_map", "DB table to query against")
 	dbNamePtr := flag.String("dbname", "bugzilla", "DB name to query against")
 	flag.Parse()
 
@@ -72,7 +71,7 @@ func main() {
 		panic(err)
 	}
 
-	log.Println(connectStr)
+	log.Info(connectStr)
 
 	const dbType = "mysql"
 	db, err := sql.Open(dbType, connectStr)
@@ -82,19 +81,21 @@ func main() {
 		panic(fmt.Errorf("failed to open connection to the database"))
 	}
 
-	rows, err := db.Query(fmt.Sprintf("SELECT * FROM %s  LIMIT 1", *tablePtr))
+	var aversion string
+	rows, err := db.Query("select AURORA_VERSION()")
 	if err != nil {
-		panic(fmt.Errorf("failed to select from table, %q, with %v", *tablePtr, err))
+		log.WithError(err).Error("failed to open database")
+		return
 	}
+	defer rows.Close()
 
 	for rows.Next() {
-		columns, err := rows.Columns()
-		if err != nil {
-			panic(fmt.Errorf("failed to read columns from row: %v", err))
+		if err := rows.Scan(&aversion); err != nil {
+			log.WithError(err).Error("failed to scan version")
 		}
-
-		fmt.Printf("rows colums:\n%d\n", len(columns))
 	}
+	fmt.Println(aversion)
+
 }
 
 func requiredFlags(flags ...interface{}) error {
