@@ -14,3 +14,7 @@
 		}
 	  ]
 	}
+
+https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/UsingWithRDS.IAMDBAuth.IAMPolicy.html
+is misleading at time of writing. It should be correct to look like the above
+example.
