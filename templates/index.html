@@ -9,6 +9,6 @@ h2 { border-bottom: thin solid black; }
 </style>
 <h1>Listing {{ len . }} units</h1>
 {{range .}}
-<h2 id="{{.Id}}">{{.Name}}</h2>
+<h2 id="{{.ID}}">{{.Name}}</h2>
 <p>{{ .Description }}</p>
 {{- end}}

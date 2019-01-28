@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -20,17 +19,23 @@ import (
 	"github.com/go-sql-driver/mysql"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/mux"
+	"github.com/jmoiron/sqlx"
 )
 
 type unit struct {
-	Id          int
+	ID          int
 	Name        string
 	Description template.HTML
 }
 
+type uQuery struct {
+	ID    int
+	Limit int
+	Query string
+}
+
 type handler struct {
-	DSN string
-	db  *sql.DB
+	db *sqlx.DB
 }
 
 func init() {
@@ -62,41 +67,24 @@ func main() {
 
 }
 
-func (h handler) getUnits() (units []unit, err error) {
-
-	rows, err := h.db.Query("select id, name, description from products")
-	if err != nil {
-		log.WithError(err).Error("failed to open database")
-		return units, err
+func (h handler) getUnits(args uQuery) (units []unit, err error) {
+	log.Infof("args: %#v", args)
+	if args.Limit == 0 {
+		args.Limit = 50
 	}
-
-	defer rows.Close()
-
-	for rows.Next() {
-		var u unit
-		err := rows.Scan(&u.Id, &u.Name, &u.Description)
-
-		if err != nil {
-			log.WithError(err).Error("failed to scan")
-			return units, err
-		}
-		units = append(units, u)
-	}
-
-	err = rows.Err()
-
-	if err != nil {
-		log.WithError(err).Error("row iterator issue")
-		return units, err
-	}
-
-	return units, err
-
+	err = h.db.Select(&units, fmt.Sprintf(`
+		SELECT id, name, description
+		FROM products
+		WHERE id > %v
+		LIMIT %v
+		`, args.ID, args.Limit))
+	return
 }
 
 func (h handler) listhtml(w http.ResponseWriter, r *http.Request) {
 
-	units, err := h.getUnits()
+	units, err := h.getUnits(uQuery{})
+	log.Infof("units: %#v", units)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -113,7 +101,7 @@ func (h handler) listjson(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Robots-Tag", "none")
 	}
 
-	units, err := h.getUnits()
+	units, err := h.getUnits(uQuery{})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -140,20 +128,17 @@ func New() (h handler, err error) {
 	}
 
 	provider := cfg.Credentials
-	// endpoint := "twoam2-cluster.cluster-c5eg6u2xj9yy.ap-southeast-1.rds.amazonaws.com:3306"
-	endpoint := "twoam2.c5eg6u2xj9yy.ap-southeast-1.rds.amazonaws.com:3306"
+	endpoint := "twoam2-cluster.cluster-c5eg6u2xj9yy.ap-southeast-1.rds.amazonaws.com:3306"
 	user := "mydbuser"
 
 	log.Info(endpoint)
 	authToken, err := rdsutils.BuildAuthToken(endpoint, "ap-southeast-1", user, provider)
 
-	h.DSN = fmt.Sprintf("%s:%s@tcp(%s)/%s?allowCleartextPasswords=true&tls=rds",
+	DSN := fmt.Sprintf("%s:%s@tcp(%s)/%s?allowCleartextPasswords=true&tls=rds",
 		user, authToken, endpoint, "bugzilla",
 	)
 
-	log.Info(h.DSN)
-
-	h.db, err = sql.Open("mysql", h.DSN)
+	h.db, err = sqlx.Connect("mysql", DSN)
 	if err != nil {
 		log.WithError(err).Fatal("error opening database")
 		return
