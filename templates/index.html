@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,minimum-scale=1">
+<meta name="format-detection" content="telephone=no">
 <title>Unit query</title>
 <style>
 body {
@@ -16,15 +17,18 @@ h2 { border-bottom: thin solid black; }
 </head>
 <body>
 
-	<form>
-		<label>Query<input name=query></label>
-		<label>ID<input type=number name=id></label>
-		<label>Limit<input type=number name=limit></label>
-		<input value="Next records" type=submit>
-	</form>
+<form>
+<label>Query<input value="{{ .Query.Query }}" name=query></label>
+<label>ID<input value="{{ .Query.ID }}" type=number name=id></label>
+<label>Limit<input value="{{ .Query.Limit }}" type=number name=limit></label>
+<input type="button" value="New search" onclick="form['id'].value = 0; form.submit();">
+{{ if eq (len .Units) .Query.Limit }}
+<input value="Next records" type=submit>
+{{ end }}
+</form>
 
-<h1>Listing {{ len . }} units</h1>
-{{range .}}
+<h1>Listing {{ len .Units }} units</h1>
+{{range .Units}}
 <h2 id="{{.ID}}">{{.Name}}</h2>
 <p>{{ .Description }}</p>
 {{- end}}

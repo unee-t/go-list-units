@@ -71,10 +71,6 @@ func main() {
 func (h handler) getUnits(args uQuery) (units []unit, err error) {
 	log.Infof("args: %#v", args)
 
-	if args.Limit == 0 {
-		args.Limit = 100
-	}
-
 	// https://stackoverflow.com/a/3799293/4534
 	err = h.db.Select(&units, `SELECT id, name, description
 	FROM products
@@ -90,15 +86,33 @@ func (h handler) listhtml(w http.ResponseWriter, r *http.Request) {
 	var decoder = schema.NewDecoder()
 	var query uQuery
 	err := decoder.Decode(&query, r.URL.Query())
+
+	if query.Limit == 0 {
+		query.Limit = 100
+	}
+
 	units, err := h.getUnits(query)
 	log.Infof("units: %#v", units)
+	if len(units) >= 1 {
+		query.ID = units[len(units)-1].ID
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	t := template.Must(template.New("").ParseGlob("templates/*.html"))
-	t.ExecuteTemplate(w, "index.html", units)
+	err = t.ExecuteTemplate(w, "index.html", struct {
+		Units []unit
+		Query uQuery
+	}{
+		units,
+		query,
+	})
+
+	if err != nil {
+		log.WithError(err).Error("template")
+	}
 
 }
 
