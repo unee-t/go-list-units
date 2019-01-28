@@ -19,6 +19,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/mux"
+	"github.com/gorilla/schema"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -29,9 +30,9 @@ type unit struct {
 }
 
 type uQuery struct {
-	ID    int
-	Limit int
-	Query string
+	ID    int    `schema:"id"`
+	Limit int    `schema:"limit"`
+	Query string `schema:"query"`
 }
 
 type handler struct {
@@ -86,8 +87,10 @@ func (h handler) getUnits(args uQuery) (units []unit, err error) {
 }
 
 func (h handler) listhtml(w http.ResponseWriter, r *http.Request) {
-
-	units, err := h.getUnits(uQuery{})
+	var decoder = schema.NewDecoder()
+	var query uQuery
+	err := decoder.Decode(&query, r.URL.Query())
+	units, err := h.getUnits(query)
 	log.Infof("units: %#v", units)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

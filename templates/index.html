@@ -1,3 +1,9 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,minimum-scale=1">
+<title>Unit query</title>
 <style>
 body {
   margin: 0 auto;
@@ -7,8 +13,20 @@ body {
 }
 h2 { border-bottom: thin solid black; }
 </style>
+</head>
+<body>
+
+	<form>
+		<label>Query<input name=query></label>
+		<label>ID<input type=number name=id></label>
+		<label>Limit<input type=number name=limit></label>
+		<input value="Next records" type=submit>
+	</form>
+
 <h1>Listing {{ len . }} units</h1>
 {{range .}}
 <h2 id="{{.ID}}">{{.Name}}</h2>
 <p>{{ .Description }}</p>
 {{- end}}
+</body>
+</html>
