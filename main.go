@@ -69,15 +69,19 @@ func main() {
 
 func (h handler) getUnits(args uQuery) (units []unit, err error) {
 	log.Infof("args: %#v", args)
+
 	if args.Limit == 0 {
-		args.Limit = 50
+		args.Limit = 100
 	}
-	err = h.db.Select(&units, fmt.Sprintf(`
-		SELECT id, name, description
-		FROM products
-		WHERE id > %v
-		LIMIT %v
-		`, args.ID, args.Limit))
+
+	// https://stackoverflow.com/a/3799293/4534
+	err = h.db.Select(&units, `SELECT id, name, description
+	FROM products
+	WHERE id > ?
+	AND name LIKE ?
+	ORDER BY id
+	LIMIT ?`,
+		args.ID, "%"+args.Query+"%", args.Limit)
 	return
 }
 
