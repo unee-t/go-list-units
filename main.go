@@ -30,7 +30,7 @@ type unit struct {
 }
 
 type uQuery struct {
-	ID     int    `schema:"id"`
+	IDs    []int  `schema:"ids"`
 	Limit  int    `schema:"limit"`
 	Cursor int    `schema:"cursor"` // used in deletions
 	Query  string `schema:"query"`
@@ -95,9 +95,6 @@ func (h handler) listhtml(w http.ResponseWriter, r *http.Request) {
 
 	units, err := h.getUnits(query)
 	log.Debugf("units: %#v", units)
-	if len(units) >= 1 {
-		query.ID = units[len(units)-1].ID
-	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -229,18 +226,21 @@ func (h handler) deleteUnit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.WithField("id", query.ID).Info("delete")
-	_, err = h.runsql("cleanup_remove_a_unit_bzfe.sql", query.ID)
+	log.WithField("number to delete", len(query.IDs)).Info("delete")
+	for _, id := range query.IDs {
+		_, err = h.runsql("cleanup_remove_a_unit_bzfe.sql", id)
 
-	if err != nil {
-		log.WithError(err).Error("sql failed")
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		if err != nil {
+			log.WithError(err).Error("sql failed")
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 
 	var encoder = schema.NewEncoder()
 	v := url.Values{}
 	err = encoder.Encode(query, v)
+	v.Del("ids")
 	if err != nil {
 		log.WithError(err).Error("url failed to encode")
 		http.Error(w, err.Error(), http.StatusInternalServerError)

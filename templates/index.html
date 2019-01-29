@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name=viewport content="width=device-width, initial-scale=1">
 <meta name="format-detection" content="telephone=no">
+<script>
+	function toggle() {
+		checkboxes = document.getElementsByName('ids');
+		for(var i=0, n=checkboxes.length;i<n;i++) {
+			checkboxes[i].checked = !checkboxes[i].checked;
+		}
+	}
+</script>
 <title>Unit query</title>
 <style>
 body {
@@ -28,18 +36,24 @@ h2 { border-bottom: thin solid black; }
 </form>
 
 <h1>Listing {{ len .Units }} units</h1>
-{{range .Units}}
-<h2 id="{{.ID}}">{{.Name}}</h2>
-<p>{{ .Description }}</p>
+
 
 <form action="/delete" method="post">
-<input type="hidden" name="id" value="{{.ID}}">
 <input value="{{ $.Query.Limit }}" type=hidden  name=limit>
 <input value="{{ $.Query.Query }}" type=hidden name=query>
 <input value="{{ $.Query.Cursor }}" type=hidden name=cursor></label>
-<input value="Delete {{.ID}}" type=submit>
+<input value="Delete" type=submit>
+<input type="button" value="Toggle" onclick="toggle();">
+
+
+{{range .Units}}
+<h2 id="{{.ID}}">
+<label><input type="checkbox" name="ids" value="{{.ID}}">{{.Name}}
+</label></h2>
+<p>{{ .Description }}</p>
+{{- end}}
 </form>
 
-{{- end}}
+
 </body>
 </html>
