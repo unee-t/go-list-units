@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
 
 	"github.com/apex/log"
@@ -17,7 +18,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws/external"
 	"github.com/aws/aws-sdk-go-v2/service/rds/rdsutils"
 	"github.com/go-sql-driver/mysql"
-	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/schema"
 	"github.com/jmoiron/sqlx"
@@ -30,9 +30,10 @@ type unit struct {
 }
 
 type uQuery struct {
-	ID    int    `schema:"id"`
-	Limit int    `schema:"limit"`
-	Query string `schema:"query"`
+	ID     int    `schema:"id"`
+	Limit  int    `schema:"limit"`
+	Cursor int    `schema:"cursor"` // used in deletions
+	Query  string `schema:"query"`
 }
 
 type handler struct {
@@ -61,6 +62,7 @@ func main() {
 	app := mux.NewRouter()
 	app.HandleFunc("/", h.listjson).Methods("GET").Headers("Accept", "application/json")
 	app.HandleFunc("/", h.listhtml).Methods("GET")
+	app.HandleFunc("/delete", h.deleteUnit).Methods("POST")
 	app.HandleFunc("/ping", h.ping).Methods("GET")
 	if err := http.ListenAndServe(addr, app); err != nil {
 		log.WithError(err).Fatal("error listening")
@@ -78,7 +80,7 @@ func (h handler) getUnits(args uQuery) (units []unit, err error) {
 	AND name LIKE ?
 	ORDER BY id
 	LIMIT ?`,
-		args.ID, "%"+args.Query+"%", args.Limit)
+		args.Cursor, "%"+args.Query+"%", args.Limit)
 	return
 }
 
@@ -92,7 +94,7 @@ func (h handler) listhtml(w http.ResponseWriter, r *http.Request) {
 	}
 
 	units, err := h.getUnits(query)
-	log.Infof("units: %#v", units)
+	log.Debugf("units: %#v", units)
 	if len(units) >= 1 {
 		query.ID = units[len(units)-1].ID
 	}
@@ -101,7 +103,16 @@ func (h handler) listhtml(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	t := template.Must(template.New("").ParseGlob("templates/*.html"))
+	var fns = template.FuncMap{
+		"cursor": func(units []unit) int {
+			if len(units) >= 1 {
+				return units[len(units)-1].ID
+			}
+			return 0
+		},
+	}
+
+	t := template.Must(template.New("").Funcs(fns).ParseGlob("templates/*.html"))
 	err = t.ExecuteTemplate(w, "index.html", struct {
 		Units []unit
 		Query uQuery
@@ -155,7 +166,7 @@ func New() (h handler, err error) {
 	log.Info(endpoint)
 	authToken, err := rdsutils.BuildAuthToken(endpoint, "ap-southeast-1", user, provider)
 
-	DSN := fmt.Sprintf("%s:%s@tcp(%s)/%s?allowCleartextPasswords=true&tls=rds",
+	DSN := fmt.Sprintf("%s:%s@tcp(%s)/%s?allowCleartextPasswords=true&tls=rds&multiStatements=true",
 		user, authToken, endpoint, "bugzilla",
 	)
 
@@ -199,4 +210,63 @@ func RegisterRDSMysqlCerts(c *http.Client) error {
 		panic(err)
 	}
 	return nil
+}
+func (h handler) deleteUnit(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	if err != nil {
+		log.WithError(err).Error("unable to parse form")
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	var decoder = schema.NewDecoder()
+	var query uQuery
+	err = decoder.Decode(&query, r.PostForm)
+
+	if err != nil {
+		log.WithError(err).Error("trouble getting args")
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	log.WithField("id", query.ID).Info("delete")
+	_, err = h.runsql("cleanup_remove_a_unit_bzfe.sql", query.ID)
+
+	if err != nil {
+		log.WithError(err).Error("sql failed")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	var encoder = schema.NewEncoder()
+	v := url.Values{}
+	err = encoder.Encode(query, v)
+	if err != nil {
+		log.WithError(err).Error("url failed to encode")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/?"+v.Encode(), http.StatusFound)
+}
+
+func (h handler) runsql(sqlfile string, unitID int) (rowsAffected int64, err error) {
+
+	if unitID == 0 {
+		return rowsAffected, fmt.Errorf("id is unset")
+	}
+
+	sqlscript, err := ioutil.ReadFile(fmt.Sprintf("sql/%s", sqlfile))
+	if err != nil {
+		return
+	}
+
+	log.Infof("Running %s with unit id %d", sqlfile, unitID)
+	fillInArg := fmt.Sprintf(string(sqlscript), unitID)
+
+	res, err := h.db.Exec(fillInArg)
+	if err != nil {
+		log.WithError(err).Error("error running SQL")
+	}
+	ioutil.WriteFile("/tmp/debug.sql", []byte(fillInArg), 0644)
+	return res.RowsAffected()
 }

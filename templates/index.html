@@ -2,7 +2,7 @@
 <html lang=en>
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,minimum-scale=1">
+<meta name=viewport content="width=device-width, initial-scale=1">
 <meta name="format-detection" content="telephone=no">
 <title>Unit query</title>
 <style>
@@ -19,9 +19,9 @@ h2 { border-bottom: thin solid black; }
 
 <form>
 <label>Query<input value="{{ .Query.Query }}" name=query></label>
-<label>ID<input value="{{ .Query.ID }}" type=number name=id></label>
+<label>Cursor<input value="{{ cursor .Units }}" type=number name=cursor></label>
 <label>Limit<input value="{{ .Query.Limit }}" type=number name=limit></label>
-<input type="button" value="New search" onclick="form['id'].value = 0; form.submit();">
+<input type="button" value="New search" onclick="form['cursor'].value = 0; form.submit();">
 {{ if eq (len .Units) .Query.Limit }}
 <input value="Next records" type=submit>
 {{ end }}
@@ -31,6 +31,15 @@ h2 { border-bottom: thin solid black; }
 {{range .Units}}
 <h2 id="{{.ID}}">{{.Name}}</h2>
 <p>{{ .Description }}</p>
+
+<form action="/delete" method="post">
+<input type="hidden" name="id" value="{{.ID}}">
+<input value="{{ $.Query.Limit }}" type=hidden  name=limit>
+<input value="{{ $.Query.Query }}" type=hidden name=query>
+<input value="{{ $.Query.Cursor }}" type=hidden name=cursor></label>
+<input value="Delete {{.ID}}" type=submit>
+</form>
+
 {{- end}}
 </body>
 </html>
