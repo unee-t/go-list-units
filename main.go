@@ -92,17 +92,16 @@ func (h handler) showtables(w http.ResponseWriter, r *http.Request) {
 
 		var id int
 		ctx := log.WithFields(log.Fields{
-			"id":    id,
 			"table": t,
 		})
-		err := h.db.QueryRow(fmt.Sprintf(`SELECT *
+		err := h.db.QueryRow(fmt.Sprintf(`SELECT id
 	FROM %s
 	WHERE id = 32767`, t)).Scan(&id)
 		if err != nil {
-			ctx.WithError(err).Error("no result")
+			ctx.WithError(err).Debug("no result")
 		}
 		if id > 0 {
-			ctx.Info("Result")
+			ctx.WithField("id", id).Info("Result")
 		}
 	}
 }
