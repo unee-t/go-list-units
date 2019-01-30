@@ -62,6 +62,7 @@ func main() {
 	app := mux.NewRouter()
 	app.HandleFunc("/", h.listjson).Methods("GET").Headers("Accept", "application/json")
 	app.HandleFunc("/", h.listhtml).Methods("GET")
+	app.HandleFunc("/tables", h.showtables).Methods("GET")
 	app.HandleFunc("/delete", h.deleteUnit).Methods("POST")
 	app.HandleFunc("/ping", h.ping).Methods("GET")
 	if err := http.ListenAndServe(addr, app); err != nil {
@@ -82,6 +83,28 @@ func (h handler) getUnits(args uQuery) (units []unit, err error) {
 	LIMIT ?`,
 		args.Cursor, "%"+args.Query+"%", args.Limit)
 	return
+}
+func (h handler) showtables(w http.ResponseWriter, r *http.Request) {
+	tables := []string{}
+	h.db.Select(&tables, "SHOW TABLES")
+	fmt.Fprintf(w, "%#v", tables)
+	for _, t := range tables {
+
+		var id int
+		ctx := log.WithFields(log.Fields{
+			"id":    id,
+			"table": t,
+		})
+		err := h.db.QueryRow(fmt.Sprintf(`SELECT *
+	FROM %s
+	WHERE id = 32767`, t)).Scan(&id)
+		if err != nil {
+			ctx.WithError(err).Error("no result")
+		}
+		if id > 0 {
+			ctx.Info("Result")
+		}
+	}
 }
 
 func (h handler) listhtml(w http.ResponseWriter, r *http.Request) {
