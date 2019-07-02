@@ -21,6 +21,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/schema"
 	"github.com/jmoiron/sqlx"
+	"github.com/unee-t/env"
 )
 
 type unit struct {
@@ -36,7 +37,8 @@ type uQuery struct {
 }
 
 type handler struct {
-	db *sqlx.DB
+	db  *sqlx.DB
+	Env env.Env
 }
 
 func init() {
@@ -92,7 +94,7 @@ func (h handler) listhtml(w http.ResponseWriter, r *http.Request) {
 	}
 
 	units, err := h.getUnits(query)
-	log.Infof("units: %#v", units)
+	// log.Infof("units: %#v", units)
 	if len(units) >= 1 {
 		query.ID = units[len(units)-1].ID
 	}
@@ -101,13 +103,24 @@ func (h handler) listhtml(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var count int
+	err = h.db.Get(&count, "select COUNT(*) from products")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	t := template.Must(template.New("").ParseGlob("templates/*.html"))
 	err = t.ExecuteTemplate(w, "index.html", struct {
-		Units []unit
-		Query uQuery
+		Units   []unit
+		Query   uQuery
+		Count   int
+		Account string
 	}{
 		units,
 		query,
+		count,
+		h.Env.AccountID,
 	})
 
 	if err != nil {
@@ -136,12 +149,22 @@ func (h handler) listjson(w http.ResponseWriter, r *http.Request) {
 // New setups the configuration assuming various parameters have been setup in the AWS account
 func New() (h handler, err error) {
 
-	cfg, err := external.LoadDefaultAWSConfig(external.WithSharedConfigProfile("uneet-dev"))
+	profile := "uneet-dev"
+	if os.Getenv("AWS_PROFILE") != "" {
+		profile = os.Getenv("AWS_PROFILE")
+	}
+
+	cfg, err := external.LoadDefaultAWSConfig(external.WithSharedConfigProfile(profile))
 	if err != nil {
 		log.WithError(err).Fatal("setting up credentials")
 		return
 	}
 	cfg.Region = endpoints.ApSoutheast1RegionID
+
+	h.Env, err = env.New(cfg)
+	if err != nil {
+		log.WithError(err).Warn("error getting unee-t env")
+	}
 
 	err = RegisterRDSMysqlCerts(http.DefaultClient)
 	if err != nil {
@@ -149,10 +172,10 @@ func New() (h handler, err error) {
 	}
 
 	provider := cfg.Credentials
-	endpoint := "twoam2-cluster.cluster-c5eg6u2xj9yy.ap-southeast-1.rds.amazonaws.com:3306"
+	endpoint := h.Env.GetSecret("MYSQL_HOST") + ":3306"
 	user := "mydbuser"
 
-	log.Info(endpoint)
+	log.Infof("Profile: %s Endpoint: %s", profile, endpoint)
 	authToken, err := rdsutils.BuildAuthToken(endpoint, "ap-southeast-1", user, provider)
 
 	DSN := fmt.Sprintf("%s:%s@tcp(%s)/%s?allowCleartextPasswords=true&tls=rds",
